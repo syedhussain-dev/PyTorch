@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 import yaml
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -192,7 +193,7 @@ class VisionMamba(nn.Module):
     x = torch.cat((cls_token, x), dim=1)
     x = x + self.position_embedding
     for block in self.encoder_blocks:
-      x = block(x)
+      x = checkpoint(block, x, use_reentrant=False)
     x = x.mean(dim=1)
     x = self.mlp_head(x)
     return x

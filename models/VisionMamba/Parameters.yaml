@@ -7,3 +7,4 @@ VisionMamba:
   num_encoder_layers: 12
   expand_dim: 1536
   ssm_dim: 16
+  gradient_checkpointing: true
