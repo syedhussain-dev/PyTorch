@@ -83,13 +83,13 @@ class SelectiveSSM(nn.Module):
       for i in reversed(range(num_tokens)):
         A_bar,B_bar = self.discretization(delta[:,i:i+1,:],B[:,i:i+1,:])
         h_t = (A_bar.squeeze(dim=1) * residual_h) + (B_bar.squeeze(dim=1) * x[:,i:i+1,:].squeeze(dim=1).unsqueeze(dim=-1))
-        y_t += torch.sum(C[:,i:i+1,:] * h_t,dim=-1)
+        y_t = torch.sum(C[:,i:i+1,:] * h_t,dim=-1)
         residual_h = h_t
     else:
       for i in range(num_tokens):
         A_bar,B_bar = self.discretization(delta[:,i:i+1,:],B[:,i:i+1,:])
         h_t = (A_bar.squeeze(dim=1) * residual_h) + (B_bar.squeeze(dim=1) * x[:,i:i+1,:].squeeze(dim=1).unsqueeze(dim=-1))
-        y_t += torch.sum(C[:,i:i+1,:] * h_t,dim=-1)
+        y_t = torch.sum(C[:,i:i+1,:] * h_t,dim=-1)
         residual_h = h_t
     return y_t
 
