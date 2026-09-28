@@ -52,16 +52,16 @@ class Discretization(nn.Module):
     self.ssm_dim = ssm_dim
 
   def forward(self, delta:torch.Tensor, B:torch.Tensor):
-    batch, tokens, expand_dim = delta.shape
-    A_bar = torch.zeros(size=[batch,tokens,expand_dim,self.ssm_dim],device=delta.device)
-    B_bar = torch.zeros(size=[batch,tokens,expand_dim,self.ssm_dim],device=delta.device)
-    delta_A = delta[:].unsqueeze(dim=-1) * self.A.unsqueeze(dim=0).unsqueeze(dim=0)
+    batch, _, expand_dim = delta.shape
+    A_bar = torch.zeros(size=[batch,1,expand_dim,self.ssm_dim],device=delta.device)
+    B_bar = torch.zeros(size=[batch,1,expand_dim,self.ssm_dim],device=delta.device)
+    delta_A = delta.unsqueeze(dim=-1) * self.A.unsqueeze(dim=0).unsqueeze(dim=0)
     A_bar = torch.exp(delta_A)
     B_bar = ((A_bar - 1) * delta.unsqueeze(dim=-1) * B.unsqueeze(dim=-2)) / delta_A
     return A_bar, B_bar
-    
-class ForwardSSM(nn.Module):
-  def __init__(self, embed_dim:int, ssm_dim:int, expand_dim:int):
+
+class SelectiveSSM(nn.Module):
+  def __init__(self, embed_dim:int, ssm_dim:int, expand_dim:int, backward_pass:bool):
     super().__init__()
     self.B_projection = nn.Linear(expand_dim,ssm_dim)
     self.C_projection = nn.Linear(expand_dim,ssm_dim)
@@ -70,44 +70,27 @@ class ForwardSSM(nn.Module):
     self.embed_dim = embed_dim
     self.expand_dim = expand_dim
     self.discretization = Discretization(ssm_dim=ssm_dim,expand_dim=expand_dim)
+    self.backward_pass = backward_pass
 
   def forward(self,x:torch.Tensor):
     batch,num_tokens,_ = x.shape
     B = self.B_projection(x)
     C = self.C_projection(x)
     delta = F.softplus(self.delta_projection(x))
-    A_bar,B_bar = self.discretization(delta,B)
     y_t = torch.zeros(size=(batch,num_tokens,self.expand_dim),device=x.device)
     residual_h = torch.zeros(size=(batch,self.expand_dim,self.ssm_dim),device=x.device)
-    for i in range(num_tokens):
-      h_t = (A_bar[:,i,:,:] * residual_h) + (B_bar[:,i,:,:] * x.unsqueeze(dim=-1)[:,i,:,:])
-      y_t[:,i,:] += torch.sum(C.unsqueeze(dim=2)[:,i,:,:] * h_t,dim=-1)
-      residual_h = h_t
-    return y_t
-
-class BackwardSSM(nn.Module):
-  def __init__(self, embed_dim:int, ssm_dim:int, expand_dim:int):
-    super().__init__()
-    self.B_projection = nn.Linear(expand_dim,ssm_dim)
-    self.C_projection = nn.Linear(expand_dim,ssm_dim)
-    self.delta_projection = nn.Linear(expand_dim,expand_dim)
-    self.ssm_dim = ssm_dim
-    self.embed_dim = embed_dim
-    self.expand_dim = expand_dim
-    self.discretization = Discretization(ssm_dim=ssm_dim,expand_dim=expand_dim)
-
-  def forward(self, x:torch.Tensor):
-    batch,num_tokens,_ = x.shape
-    B = self.B_projection(x)
-    C = self.C_projection(x)
-    delta = F.softplus(self.delta_projection(x))
-    A_bar,B_bar = self.discretization(delta,B)
-    y_t = torch.zeros(size=(batch,num_tokens,self.expand_dim),device=x.device)
-    residual_h = torch.zeros(size=(batch,self.expand_dim,self.ssm_dim),device=x.device)
-    for i in reversed(range(num_tokens)):
-      h_t = (A_bar[:,i,:,:] * residual_h) + (B_bar[:,i,:,:] * x.unsqueeze(dim=-1)[:,i,:,:])
-      y_t[:,i,:] += torch.sum(C.unsqueeze(dim=2)[:,i,:,:] * h_t,dim=-1)
-      residual_h = h_t
+    if self.backward_pass:
+      for i in reversed(range(num_tokens)):
+        A_bar,B_bar = self.discretization(delta[:,i:i+1,:],B[:,i:i+1,:])
+        h_t = (A_bar.squeeze(dim=1) * residual_h) + (B_bar.squeeze(dim=1) * x[:,i:i+1,:].squeeze(dim=1).unsqueeze(dim=-1))
+        y_t += torch.sum(C[:,i:i+1,:] * h_t,dim=-1)
+        residual_h = h_t
+    else:
+      for i in range(num_tokens):
+        A_bar,B_bar = self.discretization(delta[:,i:i+1,:],B[:,i:i+1,:])
+        h_t = (A_bar.squeeze(dim=1) * residual_h) + (B_bar.squeeze(dim=1) * x[:,i:i+1,:].squeeze(dim=1).unsqueeze(dim=-1))
+        y_t += torch.sum(C[:,i:i+1,:] * h_t,dim=-1)
+        residual_h = h_t
     return y_t
 
 class VisionMambaEncoder(nn.Module):
@@ -121,16 +104,18 @@ class VisionMambaEncoder(nn.Module):
     self.conv_layer_1 = nn.Conv1d(in_channels=expand_dim, out_channels=expand_dim,kernel_size=3,padding=1,stride=1)
     self.conv_layer_2 = nn.Conv1d(in_channels=expand_dim, out_channels=expand_dim,kernel_size=3,padding=1,stride=1)
 
-    self.forward_ssm = ForwardSSM(
+    self.forward_ssm = SelectiveSSM(
       embed_dim=embed_dim,
       ssm_dim=ssm_dim,
-      expand_dim=expand_dim
+      expand_dim=expand_dim,
+      backward_pass=False
     )
 
-    self.backward_ssm = BackwardSSM(
+    self.backward_ssm = SelectiveSSM(
       embed_dim=expand_dim,
       ssm_dim=ssm_dim,
-      expand_dim=expand_dim
+      expand_dim=expand_dim,
+      backward_pass=True
     )
 
     self.embed_dim = embed_dim
