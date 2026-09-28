@@ -2,7 +2,7 @@ import torch
 import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 from torch.utils.tensorboard import SummaryWriter
-from text_classification.utils import saving_model
+from image_classification.utils import saving_model
 import copy
 from pathlib import Path
 
