@@ -146,7 +146,7 @@ class VisionMambaEncoder(nn.Module):
     x_forward = self.conv_layer_1(x.transpose(1,2))
     x_forward = x_forward.transpose(1,2)
 
-    x_backward = self.conv_layer_2(x_backward.transpose(1,2))
+    x_backward = self.conv_layer_2(x.transpose(1,2))
     x_backward = x_backward.transpose(1,2)
 
     y_backward = self.backward_ssm(x_backward)
