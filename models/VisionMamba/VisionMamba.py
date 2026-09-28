@@ -72,17 +72,18 @@ class ForwardSSM(nn.Module):
     self.discretization = Discretization(ssm_dim=ssm_dim,expand_dim=expand_dim)
 
   def forward(self,x:torch.Tensor):
-    batch,_,_ = x.shape
+    batch,num_tokens,_ = x.shape
     B = self.B_projection(x)
     C = self.C_projection(x)
     delta = F.softplus(self.delta_projection(x))
     A_bar,B_bar = self.discretization(delta,B)
+    y_t = torch.zeros(size=(batch,num_tokens,self.expand_dim),device=x.device)
     residual_h = torch.zeros(size=(batch,self.expand_dim,self.ssm_dim),device=x.device)
-    h_t = (A_bar * residual_h.unsqueeze(dim=1)) + (B_bar * x.unsqueeze(dim=-1))
-    h_t = h_t.squeeze(dim=1)
-    y = (C.unsqueeze(dim=2) * h_t.unsqueeze(dim=1)).unsqueeze(dim=-1)
-    residual_h = h_t
-    return y
+    for i in range(num_tokens):
+      h_t = (A_bar[:,i,:,:] * residual_h) + (B_bar[:,i,:,:] * x.unsqueeze(dim=-1)[:,i,:,:])
+      y_t[:,i,:] += torch.sum(C.unsqueeze(dim=2)[:,i,:,:] * h_t,dim=-1)
+      residual_h = h_t
+    return y_t
 
 class BackwardSSM(nn.Module):
   def __init__(self, embed_dim:int, ssm_dim:int, expand_dim:int):
@@ -96,17 +97,18 @@ class BackwardSSM(nn.Module):
     self.discretization = Discretization(ssm_dim=ssm_dim,expand_dim=expand_dim)
 
   def forward(self, x:torch.Tensor):
-    batch,_,_ = x.shape
+    batch,num_tokens,_ = x.shape
     B = self.B_projection(x)
     C = self.C_projection(x)
     delta = F.softplus(self.delta_projection(x))
     A_bar,B_bar = self.discretization(delta,B)
+    y_t = torch.zeros(size=(batch,num_tokens,self.expand_dim),device=x.device)
     residual_h = torch.zeros(size=(batch,self.expand_dim,self.ssm_dim),device=x.device)
-    h_t = (torch.flip(A_bar,dims=[1]) * residual_h.unsqueeze(dim=1)) + (torch.flip(B_bar,dims=[1]) * x.unsqueeze(dim=-1))
-    h_t = h_t.squeeze(dim=1)
-    y = (torch.flip(C,dims=[1]).unsqueeze(dim=2) * h_t.unsqueeze(dim=1)).unsqueeze(dim=-1)
-    residual_h = h_t
-    return torch.flip(y,dims=[1])
+    for i in reversed(range(num_tokens)):
+      h_t = (A_bar[:,i,:,:] * residual_h) + (B_bar[:,i,:,:] * x.unsqueeze(dim=-1)[:,i,:,:])
+      y_t[:,i,:] += torch.sum(C.unsqueeze(dim=2)[:,i,:,:] * h_t,dim=-1)
+      residual_h = h_t
+    return y_t
 
 class VisionMambaEncoder(nn.Module):
   def __init__(self, embed_dim, ssm_dim, expand_dim):
@@ -131,8 +133,6 @@ class VisionMambaEncoder(nn.Module):
       expand_dim=expand_dim
     )
 
-    self.ssm_output = nn.Linear(in_features=ssm_dim, out_features=expand_dim)
-
     self.embed_dim = embed_dim
     self.expand_dim = expand_dim
     self.ssm_dim = ssm_dim
@@ -146,15 +146,11 @@ class VisionMambaEncoder(nn.Module):
     x_forward = self.conv_layer_1(x.transpose(1,2))
     x_forward = x_forward.transpose(1,2)
 
-    x_backward = torch.flip(x,dims=[1])
     x_backward = self.conv_layer_2(x_backward.transpose(1,2))
     x_backward = x_backward.transpose(1,2)
 
     y_backward = self.backward_ssm(x_backward)
     y_forward = self.forward_ssm(x_forward)
-
-    y_backward = self.ssm_output(y_backward)
-    y_forward = self.ssm_output(y_forward)
     
     y = y_forward * F.silu(z) + y_backward * F.silu(z)
     y = self.Y_projection(y)
