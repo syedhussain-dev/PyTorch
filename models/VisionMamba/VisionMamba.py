@@ -58,7 +58,7 @@ class Discretization(nn.Module):
     B_bar = torch.zeros(size=[batch,1,expand_dim,self.ssm_dim],device=delta.device)
     delta_A = delta.unsqueeze(dim=-1) * self.A.unsqueeze(dim=0).unsqueeze(dim=0)
     A_bar = torch.exp(delta_A)
-    B_bar = ((A_bar - 1) * delta.unsqueeze(dim=-1) * B.unsqueeze(dim=-2)) / delta_A
+    B_bar = ((A_bar - 1) * delta.unsqueeze(dim=-1) * B.unsqueeze(dim=2)) / delta_A
     return A_bar, B_bar
 
 class SelectiveSSM(nn.Module):
@@ -75,24 +75,20 @@ class SelectiveSSM(nn.Module):
 
   def forward(self,x:torch.Tensor):
     batch,num_tokens,_ = x.shape
+    outputs = []
     B = self.B_projection(x)
     C = self.C_projection(x)
     delta = F.softplus(self.delta_projection(x))
-    y_t = torch.zeros(size=(batch,num_tokens,self.expand_dim),device=x.device)
     residual_h = torch.zeros(size=(batch,self.expand_dim,self.ssm_dim),device=x.device)
     if self.backward_pass:
-      for i in reversed(range(num_tokens)):
-        A_bar,B_bar = self.discretization(delta[:,i:i+1,:],B[:,i:i+1,:])
-        h_t = (A_bar.squeeze(dim=1) * residual_h) + (B_bar.squeeze(dim=1) * x[:,i:i+1,:].squeeze(dim=1).unsqueeze(dim=-1))
-        y_t = torch.sum(C[:,i:i+1,:] * h_t,dim=-1)
-        residual_h = h_t
-    else:
-      for i in range(num_tokens):
-        A_bar,B_bar = self.discretization(delta[:,i:i+1,:],B[:,i:i+1,:])
-        h_t = (A_bar.squeeze(dim=1) * residual_h) + (B_bar.squeeze(dim=1) * x[:,i:i+1,:].squeeze(dim=1).unsqueeze(dim=-1))
-        y_t = torch.sum(C[:,i:i+1,:] * h_t,dim=-1)
-        residual_h = h_t
-    return y_t
+      B, C, delta = torch.flip(B,dims=[1]), torch.flip(C,dims=[1]), torch.flip(delta,dims=[1])
+    for i in range(num_tokens):
+      A_bar,B_bar = self.discretization(delta[:,i:i+1,:],B[:,i:i+1,:])
+      h_t = (A_bar.squeeze(dim=1) * residual_h) + (B_bar.squeeze(dim=1) * x[:,i:i+1,:].squeeze(dim=1).unsqueeze(dim=-1))
+      y_t = torch.sum(C[:,i:i+1,:] * h_t,dim=-1)
+      outputs.append(y_t)
+      residual_h = h_t
+    return torch.stack(outputs,dim=1)
 
 class VisionMambaEncoder(nn.Module):
   def __init__(self, embed_dim, ssm_dim, expand_dim):
@@ -136,7 +132,7 @@ class VisionMambaEncoder(nn.Module):
     x_backward = x_backward.transpose(1,2)
 
     y_backward = self.backward_ssm(x_backward)
-    y_forward = self.forward_ssm(x_forward)
+    y_forward = self.forward_ssm(x_forward)    
     
     y = y_forward * F.silu(z) + y_backward * F.silu(z)
     y = self.Y_projection(y)

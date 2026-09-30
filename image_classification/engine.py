@@ -71,15 +71,15 @@ def batch_train(model:torch.nn.Module,
   #    input_to_model=torch.randn(32,3,224,224).to(device)
   #  )
 
-  for epoch in range(epochs):
+  for epoch in range(1,epochs+1):
       epoch_start = timer()
-      print(f"Epoch: {epoch+1} \n ---------------------------------------------------------")
+      print(f"Epoch: {epoch} \n ---------------------------------------------------------")
       train_loss, train_correct, train_total = 0.0,0,0          
       model.train()
       optimiser.zero_grad()
       for i, (x,y) in enumerate(train_data_loader):
           x,y = x.to(device), y.to(device)
-          with torch.autocast(device_type=device.type, dtype=torch.float16):
+          with torch.autocast(device_type=device.type, dtype=torch.float32):
             y_logits = model(x)
             loss = loss_fn(
               y_logits, y
@@ -104,14 +104,14 @@ def batch_train(model:torch.nn.Module,
             scaler.update()
             optimiser.zero_grad() # zeros the previous gradient so previous epochs don't contaminate the batch
 
-          train_loss /= len(train_data_loader)
+      train_loss /= len(train_data_loader)
 
       val_loss, val_correct, val_total = 0.0,0,0
       model.eval()
       with torch.inference_mode():
           for x,y in val_data_loader:
               x,y = x.to(device), y.to(device)
-              with torch.autocast(device_type=device.type, dtype=torch.float16):
+              with torch.autocast(device_type=device.type, dtype=torch.float32):
                 val_logits = model(x)
                 loss = loss_fn(
                   val_logits, y
@@ -166,11 +166,12 @@ def batch_train(model:torch.nn.Module,
   with torch.inference_mode():
        for x,y in test_data_loader:
             x,y = x.to(device),y.to(device)
-            with torch.autocast(device_type=device.type, dtype=torch.float16):
+            with torch.autocast(device_type=device.type, dtype=torch.float32):
               test_logits=model(x)
-              test_loss = loss_fn(
+              loss = loss_fn(
                 test_logits,y
               )
+              test_loss += loss.item()
               y_pred_labels = test_logits.argmax(dim=1)
               test_correct += (y_pred_labels == y).sum().item()
               test_total += y.size(0)
