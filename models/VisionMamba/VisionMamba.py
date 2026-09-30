@@ -47,6 +47,13 @@ class PatchEmbedding(nn.Module):
       return x
 
 class Discretization(nn.Module):
+  """
+  Converts a continuous system to a discrete system to process tokens
+
+  dh/dt = Ah + Bx is the continous system which evolves with time but
+  we use the discrete system h_t = A_bar * h_t-1 - B_bar * x_t to pass
+  each token through it so h evolves with tokens. 
+  """
   def __init__(self,ssm_dim:int, expand_dim:int):
     super().__init__()
     self.A = nn.Parameter(torch.rand((expand_dim,ssm_dim)))

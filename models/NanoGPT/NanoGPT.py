@@ -2,6 +2,7 @@ import torch
 from torch import nn
 import yaml
 import os
+from torch.utils.checkpoint import checkpoint
 script_dir = os.path.dirname(os.path.abspath(__file__))
 yaml_path = os.path.join(script_dir,"Parameters.yaml")
 
@@ -162,7 +163,8 @@ class GPT(nn.Module):
               mlp_dropout:float=config["mlp_dropout"],
               attn_dropout:float=config["attn_dropout"],
               num_encoder_layers:int=config["num_encoder_layers"],
-              context_length:int=config["context_length"]):
+              context_length:int=config["context_length"],
+              gradient_checkpointing:bool=config["gradient_checkpointing"]):
     
     super().__init__()
     self.vocab_size = vocab_size
@@ -173,6 +175,7 @@ class GPT(nn.Module):
     self.num_encoder_layers = num_encoder_layers
     self.context_length = context_length
     self.heads = heads
+    self.gradient_checkpointing = gradient_checkpointing
 
     self.token_embedding = TokenEmbedding(vocab_size=self.vocab_size, embed_dim=self.embed_dim)
     self.positional_embedding = nn.Parameter(torch.randn((1,self.context_length,self.embed_dim)))
@@ -197,7 +200,10 @@ class GPT(nn.Module):
     x = x + self.positional_embedding
     x = self.dropout(x)
     for block in self.encoder_blocks:
-      x = block(x)
+      if self.gradient_checkpointing:
+        x = checkpoint(block, x, use_reentrant=False)
+      else:
+        x = block(x)
     x = self.norm(x)
     x = self.LLM_head(x)
     return x

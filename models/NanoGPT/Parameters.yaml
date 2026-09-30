@@ -6,3 +6,9 @@ NanoGPT:
   attn_dropout: 0.0
   num_encoder_layers: 12
   context_length: 1024
+  gradient_checkpointing: false
+
+  training:
+    batch_size: 8
+    epochs: 5
+    
