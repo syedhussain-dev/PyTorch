@@ -21,6 +21,7 @@ def batch_train(model:torch.nn.Module,
                 model_name:str,
                 target_dir:str,
                 accum_steps:int,
+                enable_autocast:bool,
                 grad_clip:float=1.0):
   """
   Function for training batches of data using dataloaders
@@ -44,6 +45,7 @@ def batch_train(model:torch.nn.Module,
     target_dir: The directory where our model is saved to
     vocab_size: The amount of words in the text
     accum_steps: The amount of epochs between optimiser updates
+    enable_autocast: A boolean that determines if the engine using automatic mixed precision
     grad_clip: The maximum allowed gradient
 
   Returns:
@@ -71,38 +73,51 @@ def batch_train(model:torch.nn.Module,
   #    input_to_model=torch.randn(32,3,224,224).to(device)
   #  )
 
-  for epoch in range(1,epochs+1):
+  for epoch in range(epochs):
       epoch_start = timer()
-      print(f"Epoch: {epoch} \n ---------------------------------------------------------")
+      print(f"Epoch: {epoch+1} \n ---------------------------------------------------------")
       train_loss, train_correct, train_total = 0.0,0,0          
       model.train()
       optimiser.zero_grad()
       for i, (x,y) in enumerate(train_data_loader):
           x,y = x.to(device), y.to(device)
-          with torch.autocast(device_type=device.type, dtype=torch.float32):
-            y_logits = model(x)
-            loss = loss_fn(
-              y_logits, y
-            )
-            train_loss += loss.item()
-            loss = loss / accum_steps # Scaling loss so accumulated gradient match a large batch
-            y_pred_labels = y_logits.argmax(dim=1)
-            train_correct += (y_pred_labels == y).sum().item()
-            train_total += y.size(0)
-                      
-          scaler.scale(loss).backward() # float.16 gradient values can become zero and vanish so we scale up the losses
-          # and then do backpropagation
-          is_last_batch = (i+1) == len(train_data_loader)
-          # Optimiser is changed in batches of 4 so the if the dataloader is not divisible by 4 the remaining batch gradient are discarded
-          # This allows the inclusion of the last remaining batches
-          if(i+1) % accum_steps == 0 or is_last_batch:
-            scaler.unscale_(optimiser)
-            # we undo the scaling once done
-            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-            # prevents gradient weights from going above grad_clip and blowing up the weights
-            scaler.step(optimiser)
-            scaler.update()
-            optimiser.zero_grad() # zeros the previous gradient so previous epochs don't contaminate the batch
+          if enable_autocast:
+            with torch.autocast(device_type=device.type, dtype=torch.float16):
+              y_logits = model(x)
+              loss = loss_fn(
+                y_logits, y
+              )
+              train_loss += loss.item()
+              loss = loss / accum_steps # Scaling loss so accumulated gradient match a large batch
+              y_pred_labels = y_logits.argmax(dim=1)
+              train_correct += (y_pred_labels == y).sum().item()
+              train_total += y.size(0)
+                        
+            scaler.scale(loss).backward() # float.16 gradient values can become zero and vanish so we scale up the losses
+            # and then do backpropagation
+            is_last_batch = (i+1) == len(train_data_loader)
+            # Optimiser is changed in batches of 4 so the if the dataloader is not divisible by 4 the remaining batch gradient are discarded
+            # This allows the inclusion of the last remaining batches
+            if(i+1) % accum_steps == 0 or is_last_batch:
+              scaler.unscale_(optimiser)
+              # we undo the scaling once done
+              torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+              # prevents gradient weights from going above grad_clip and blowing up the weights
+              scaler.step(optimiser)
+              scaler.update()
+              optimiser.zero_grad() # zeros the previous gradient so previous epochs don't contaminate the batch
+
+          else:
+             y_logits = model(x)
+             loss = loss_fn(y_logits, y)
+             train_loss += loss.item()
+             y_pred_labels = y_logits.argmax(dim=1)
+             train_correct += (y_pred_labels == y).sum().item()
+             train_total += y.size(0)
+
+             optimiser.zero_grad()
+             loss.backward()
+             optimiser.step()
 
       train_loss /= len(train_data_loader)
 
@@ -111,7 +126,18 @@ def batch_train(model:torch.nn.Module,
       with torch.inference_mode():
           for x,y in val_data_loader:
               x,y = x.to(device), y.to(device)
-              with torch.autocast(device_type=device.type, dtype=torch.float32):
+              if enable_autocast:
+                with torch.autocast(device_type=device.type, dtype=torch.float16):
+                  val_logits = model(x)
+                  loss = loss_fn(
+                    val_logits, y
+                  )
+                  val_loss += loss.item()
+                  y_pred_labels = val_logits.argmax(dim=1)
+                  val_correct += (y_pred_labels == y).sum().item()
+                  val_total += y.size(0)
+
+              else:
                 val_logits = model(x)
                 loss = loss_fn(
                   val_logits, y
@@ -137,7 +163,7 @@ def batch_train(model:torch.nn.Module,
           best_model_loss = val_loss
           best_model_weights = copy.deepcopy(model.state_dict())
 
-      best_stagnation_loss, epochs_no_imp = stagnation(val_loss,epoch,best_stagnation_loss, epochs_no_imp)
+      best_stagnation_loss, epochs_no_imp = stagnation(val_loss,best_stagnation_loss, epochs_no_imp)
       if(epochs_no_imp >= patience):
           print("Loss is stagnant. Prematurely ending training!")
           break
@@ -166,7 +192,17 @@ def batch_train(model:torch.nn.Module,
   with torch.inference_mode():
        for x,y in test_data_loader:
             x,y = x.to(device),y.to(device)
-            with torch.autocast(device_type=device.type, dtype=torch.float32):
+            if enable_autocast:
+              with torch.autocast(device_type=device.type, dtype=torch.float16):
+                test_logits=model(x)
+                loss = loss_fn(
+                  test_logits,y
+                )
+                test_loss += loss.item()
+                y_pred_labels = test_logits.argmax(dim=1)
+                test_correct += (y_pred_labels == y).sum().item()
+                test_total += y.size(0)
+            else:
               test_logits=model(x)
               loss = loss_fn(
                 test_logits,y
@@ -213,7 +249,8 @@ def detect_overfitting(results,epoch:int,overfit_counter:int):
     overfit_counter: To be used by the program to see if the model
     is overfitting
   """
-
+  if epoch == 0: 
+    return 0
   min_delta = 0.01
 
   if(results["val_loss"][epoch] > results["val_loss"][epoch-1] + min_delta
@@ -227,7 +264,7 @@ def detect_overfitting(results,epoch:int,overfit_counter:int):
   return overfit_counter
 
 
-def stagnation(current_loss, epoch:int,best_loss, epochs_no_imp):
+def stagnation(current_loss,best_loss, epochs_no_imp):
 
   """
   A helper function that detects if the model's training has become
@@ -235,7 +272,6 @@ def stagnation(current_loss, epoch:int,best_loss, epochs_no_imp):
 
   Args:
     current_loss: The validation loss
-    epoch: The amount of times the data is trained for
     best_loss: The lowest loss the model has detected
     epochs_no_imp: The amount of epochs that the model has no improved for
 

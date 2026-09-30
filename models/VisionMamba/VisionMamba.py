@@ -147,9 +147,11 @@ class VisionMamba(nn.Module):
               num_classes:int=config["num_classes"],
               num_encoder_layers:int=config["num_encoder_layers"],
               expand_dim:int=config["expand_dim"],
-              ssm_dim:int=config["ssm_dim"]):
+              ssm_dim:int=config["ssm_dim"],
+              gradient_checkpointing:bool=config["gradient_checkpointing"]):
     super().__init__()
 
+    self.gradient_checkpointing = gradient_checkpointing
     assert image_size % patch_size == 0
     self.num_patch = (image_size ** 2) // (patch_size ** 2)
 
@@ -189,7 +191,10 @@ class VisionMamba(nn.Module):
     x = torch.cat((cls_token, x), dim=1)
     x = x + self.position_embedding
     for block in self.encoder_blocks:
-      x = checkpoint(block, x, use_reentrant=False)
+      if self.gradient_checkpointing:
+        x = checkpoint(block, x, use_reentrant=False)
+      else:
+        x = block(x)
     x = x.mean(dim=1)
     x = self.mlp_head(x)
     return x
