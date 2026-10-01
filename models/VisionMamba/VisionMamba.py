@@ -53,6 +53,19 @@ class Discretization(nn.Module):
   dh/dt = Ah + Bx is the continous system which evolves with time but
   we use the discrete system h_t = A_bar * h_t-1 - B_bar * x_t to pass
   each token through it so h evolves with tokens. 
+
+  Args:
+    ssm_dim: Number of state values from each feature passed on
+    expand_dim: Features are expanded so the model has more capacity for non-linearity
+
+  Returns:
+    Discrete values of A and B
+
+  Examples:
+    delta, B: (batch_size, 1, expand_dim), (batch_size, 1, ssm_dim)
+    delta_A: (batch_size, 1, expand_dim, ssm_dim)
+    (torch.exp has no effect on tensor size)
+    A_bar, B_bar: (batch_size, 1, expand_dim, ssm_dim)
   """
   def __init__(self,ssm_dim:int, expand_dim:int):
     super().__init__()
@@ -69,6 +82,32 @@ class Discretization(nn.Module):
     return A_bar, B_bar
 
 class SelectiveSSM(nn.Module):
+  """
+  Each tokens is passed sequentially and the current state h_t allows token
+  information to be shared.
+
+  The previous tokens state is residual_h and that is thus used in the current
+  h_t. This process is also done in reverse. The output is then calculated using
+  C * h_t and summed over the ssm_dim for each feature. The output tensor list is
+  stacked on the token dimension and returned.
+
+  Args:
+    embed_dim: The embedding dimension for converting an image patch into a 1D vector
+    ssm_dim: The amount of memory/state values of each feature
+    expand_dim: The feature expansion used in non-linearity
+    backward_pass: If true, this would flip the token dimension
+
+  Returns:
+    Total output produced from the hidden states
+
+  Examples:
+    B, C: (batch_size, num_tokens, ssm_dim)
+    delta: (batch_size, num_tokens, expand_dim)
+    residual_h: (batch_size, 1, expand_dim, ssm_dim)
+    h_t: (batch_size,1, expand_dim, ssm_dim)
+    y_t: (batch_size, 1, expand_dim)
+    y: (batch_size, num_tokens, expand_dim)
+  """
   def __init__(self, embed_dim:int, ssm_dim:int, expand_dim:int, backward_pass:bool):
     super().__init__()
     self.B_projection = nn.Linear(expand_dim,ssm_dim)
@@ -95,9 +134,26 @@ class SelectiveSSM(nn.Module):
       y_t = torch.sum(C[:,i:i+1,:] * h_t,dim=-1)
       outputs.append(y_t)
       residual_h = h_t
-    return torch.stack(outputs,dim=1)
+    y = torch.stack(outputs,dim=1)
+    return y
 
 class VisionMambaEncoder(nn.Module):
+  """
+  Follows the architecture in the Vision Mamba Paper (2024)
+
+  Args:
+    embed_dim: The embedding dimension for converting an image patch into a 1D vector
+    ssm_dim: The amount of memory/state values of each feature
+    expand_dim: The feature expansion used in non-linearity
+  
+  Returns:
+    A sequence of processed image tokens
+
+  Examples:
+    residual, x, z: (batch_size, num_tokens, expand_dim)
+    x_forward, x_backward: (batch_size, num_tokens, expand_dim)
+    y: (batch_size, num_tokens, expand_dim)
+  """
   def __init__(self, embed_dim, ssm_dim, expand_dim):
     super().__init__()
     self.norm = nn.LayerNorm(embed_dim)
@@ -147,6 +203,39 @@ class VisionMambaEncoder(nn.Module):
     return y
 
 class VisionMamba(nn.Module):
+  """
+  Image classification model
+
+  Image is passed through a patch embedding where the image is divided
+  into patches and converted to a 1D vector tokens. The learnable 
+  classification token is concatenated with the other tokens plus learnable
+  position vectors are added to the tokens. The tokens are then passed through
+  the encoder so the cls tokens can learn from the other tokens. The image
+  representations are then passed through the mlp head where prediction
+  probabilities are given for the amount of classes. Each encoder pass 
+  the model caches the layer outputs to reduce the computational load.
+
+  Args:
+    image_size: The dimensions of the image
+    patch_size: The dimensions of an individual patch
+    in_channels: The input channels (3 for RGB)
+    embed_dim: The embedding dimension for turning patches into 1D vectors
+    num_classes: The amount of classes
+    expand_dim: The dimensions for expanding the features for necessary addition of non-linearity
+    ssm_dim: The number of states/memory for each individual features
+    gradient_checkpointing: Boolean to activate gradient checkpointing
+
+  Returns:
+    Prediction probabilities for each classes
+
+  Examples:
+    x: (batch_size, rgb_channels, height, width)
+    after patch_embedding: (batch_size, num_tokens, embed_dim)
+    cls_token: (1, 1, embed_dim)
+    positional_embedding: (1, num_patches+1, embed_dim)
+    encoder output: (batch_size, num_tokens, embed_dim)
+    after mlp_head: (batch_size, num_tokens, num_classes)
+  """
   def __init__(self, image_size:int=config["image_size"],
               patch_size:int=config["patch_size"],
               in_channels:int=config["in_channels"],

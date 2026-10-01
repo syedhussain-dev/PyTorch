@@ -485,3 +485,4 @@ class UNET(nn.Module):
         unet = UNet2DConditionModel().from_pretrained("runwayml/stable-diffusion-v1-5")
         with torch.no_grad():
             pass
+        return self

@@ -819,4 +819,5 @@ class VAE(nn.Module):
             self.post_quant_conv.bias.copy_(
                 vae.post_quant_conv.bias
             )
+        return self
 

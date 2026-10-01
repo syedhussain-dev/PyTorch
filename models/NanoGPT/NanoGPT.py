@@ -9,14 +9,6 @@ yaml_path = os.path.join(script_dir,"Parameters.yaml")
 with open(yaml_path,"r") as f:
 	config = yaml.safe_load(f)["NanoGPT"]
 
-class TokenEmbedding(nn.Module):
-  def __init__(self, vocab_size, embed_dim):
-    super().__init__()
-    self.embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_dim)
-
-  def forward(self, x):
-    return self.embedding(x)
-
 class MultiHeadCasualSelfAttention(nn.Module):
   """
   Applies multi-head self-attention to the input tokens.
@@ -99,10 +91,10 @@ class FeedForward(nn.Module):
   def __init__(self, embed_dim, mlp_dim, mlp_dropout):
       super().__init__()
       self.layer = nn.Sequential(
-          nn.Linear(embed_dim, mlp_dim),
+          nn.Linear(embed_dim,mlp_dim),
           nn.GELU(),
           nn.Dropout(mlp_dropout),
-          nn.Linear(mlp_dim, embed_dim),
+          nn.Linear(mlp_dim,embed_dim),
           nn.Dropout(mlp_dropout),
       )
 
@@ -156,6 +148,28 @@ class GPTTransformBlock(nn.Module):
 
 
 class GPT(nn.Module):
+  """
+  Final GPT class for text generation
+
+  Input tokens from the tokenizer are passed into the model where they are
+  then transformered into 1D vectors used embedding. Positional embeddings
+  and dropouts areapplied before the tokens are inputted into the encoder blocks.
+  Once thetokens have established relationships with each other they are passed
+  through a final normalisation and projected to generate text.
+
+  Args:
+    vocab_size: The maximum number of tokens
+    embed_dim: The embedding dimension used for turning tokens into vectors
+    heads: The number of heads in the attention step
+    mlp_dim: The expansion of features dimension for adding non-linearity
+    mlp_dropout: The dropout probability in the feedforward class
+    num_encoder_layers: The number of encoder layers in the model
+    context_length: The maximum number of tokens processed in a sequence
+    gradient_checkpointing: A boolean to activate gradient checkpointing
+
+  Returns:
+    A sequence of generate tokens which the tokenizer decodes
+  """
   def __init__(self, vocab_size:int,
               embed_dim:int=config["embed_dim"],
               heads:int=config["heads"],
@@ -177,7 +191,7 @@ class GPT(nn.Module):
     self.heads = heads
     self.gradient_checkpointing = gradient_checkpointing
 
-    self.token_embedding = TokenEmbedding(vocab_size=self.vocab_size, embed_dim=self.embed_dim)
+    self.embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_dim)
     self.positional_embedding = nn.Parameter(torch.randn((1,self.context_length,self.embed_dim)))
     self.dropout = nn.Dropout(p=0.1)
     self.norm = nn.LayerNorm(self.embed_dim)
@@ -195,8 +209,8 @@ class GPT(nn.Module):
     )
 
   def forward(self, x):
-    self.token_embedding = self.token_embedding.to(x.device)
-    x = self.token_embedding(x)
+    self.embedding = self.embedding.to(x.device)
+    x = self.embedding(x)
     x = x + self.positional_embedding
     x = self.dropout(x)
     for block in self.encoder_blocks:
@@ -207,3 +221,61 @@ class GPT(nn.Module):
     x = self.norm(x)
     x = self.LLM_head(x)
     return x
+
+  def load_pretrained(self):
+    from transformers import GPT2LMHeadModel
+    gpt = GPT2LMHeadModel.from_pretrained("openai-community/gpt2")
+    self.LLM_head.weight.copy_(
+      gpt.lm_head.weight
+    )
+    self.LLM_head.bias.copy_(
+      gpt.lm_head.bias
+    )
+    self.embedding.weight.copy_(
+      gpt.transformer.wte.weight
+    )
+    self.norm.weight.copy_(
+      gpt.transformer.ln_f.weight
+    )
+    self.norm.weight.copy_(
+      gpt.transformer.ln_f.weight
+    )
+    for i in range(self.num_encoder_layers):
+      self.encoder_blocks[i].norm1.weight.copy_(
+        gpt.transformer.h[i].ln_1.weight
+      )
+      self.encoder_blocks[i].norm1.bias.copy_(
+        gpt.transformer.h[i].ln_1.bias
+      )
+      self.encoder_blocks[i].norm2.weight.copy_(
+        gpt.transformer.h[i].ln_2.weight
+      )
+      self.encoder_blocks[i].norm2.bias.copy_(
+        gpt.transformer.h[i].ln_2.bias
+      )
+      self.encoder_blocks[i].mlp.layer[0].weight.copy_(
+        gpt.transformer.h[i].mlp.c_fc.weight
+      )
+      self.encoder_blocks[i].mlp.layer[0].bias.copy_(
+        gpt.transformer.h[i].mlp.c_fc.bias
+      )
+      self.encoder_blocks[i].mlp.layer[3].weight.copy_(
+        gpt.transformer.h[i].mlp.c_proj.weight
+      )
+      self.encoder_blocks[i].mlp.layer[3].bias.copy_(
+        gpt.transformer.h[i].mlp.c_proj.bias
+      )
+      self.encoder_blocks[i].attention.query_key_value.weight.copy_(
+        gpt.transformer.h[i].attn.c_attn.weight
+      )
+      self.encoder_blocks[i].attention.query_key_value.bias.copy_(
+        gpt.transformer.h[i].attn.c_attn.bias
+      )
+      self.encoder_blocks[i].attention.projection.weight.copy_(
+        gpt.transformer.h[i].attn.c_proj.weight
+      )
+      self.encoder_blocks[i].attention.projection.bias.copy_(
+        gpt.transformer.h[i].attn.c_proj.bias
+      )
+    return self
+

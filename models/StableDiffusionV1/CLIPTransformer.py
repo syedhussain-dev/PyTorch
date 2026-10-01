@@ -320,4 +320,5 @@ class CLIPTransformer(nn.Module):
             self.layernorm.bias.copy_(
                 clip.final_layer_norm.bias
             )
+        return self
 
