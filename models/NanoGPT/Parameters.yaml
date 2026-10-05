@@ -11,4 +11,12 @@ NanoGPT:
   training:
     batch_size: 8
     epochs: 5
+    optimiser: AdamW
+    loss_fn: CrossEntropyLoss
+    scheduler: CosineAnnealing
+    accum_steps: 8
+    model_name: NanoGPT
+    target_dir: saved_models
+    device: cuda
+    loss_curves: True
     

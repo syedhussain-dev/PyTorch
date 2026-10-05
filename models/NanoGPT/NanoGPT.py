@@ -225,12 +225,6 @@ class GPT(nn.Module):
   def load_pretrained(self):
     from transformers import GPT2LMHeadModel
     gpt = GPT2LMHeadModel.from_pretrained("openai-community/gpt2")
-    self.LLM_head.weight.copy_(
-      gpt.lm_head.weight
-    )
-    self.LLM_head.bias.copy_(
-      gpt.lm_head.bias
-    )
     self.embedding.weight.copy_(
       gpt.transformer.wte.weight
     )
