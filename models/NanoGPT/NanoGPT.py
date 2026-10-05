@@ -91,10 +91,10 @@ class FeedForward(nn.Module):
   def __init__(self, embed_dim, mlp_dim, mlp_dropout):
       super().__init__()
       self.layer = nn.Sequential(
-          nn.Linear(embed_dim,mlp_dim),
+          nn.Conv1d(in_channels=embed_dim,out_channels=mlp_dim,kernel_size=(1,1),stride=1,padding=1),
           nn.GELU(),
           nn.Dropout(mlp_dropout),
-          nn.Linear(mlp_dim,embed_dim),
+          nn.Conv1d(in_channels=mlp_dim,out_channels=embed_dim,kernel_size=(1,1),stride=1,padding=1),
           nn.Dropout(mlp_dropout),
       )
 
