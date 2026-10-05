@@ -225,51 +225,52 @@ class GPT(nn.Module):
   def load_pretrained(self):
     from transformers import GPT2LMHeadModel
     gpt = GPT2LMHeadModel.from_pretrained("openai-community/gpt2")
-    self.embedding.weight.copy_(
-      gpt.transformer.wte.weight
-    )
-    self.norm.weight.copy_(
-      gpt.transformer.ln_f.weight
-    )
-    self.norm.weight.copy_(
-      gpt.transformer.ln_f.weight
-    )
-    for i in range(self.num_encoder_layers):
-      self.encoder_blocks[i].norm1.weight.copy_(
-        gpt.transformer.h[i].ln_1.weight
+    with torch.no_grad():
+      self.embedding.weight.copy_(
+        gpt.transformer.wte.weight
       )
-      self.encoder_blocks[i].norm1.bias.copy_(
-        gpt.transformer.h[i].ln_1.bias
+      self.norm.weight.copy_(
+        gpt.transformer.ln_f.weight
       )
-      self.encoder_blocks[i].norm2.weight.copy_(
-        gpt.transformer.h[i].ln_2.weight
+      self.norm.weight.copy_(
+        gpt.transformer.ln_f.weight
       )
-      self.encoder_blocks[i].norm2.bias.copy_(
-        gpt.transformer.h[i].ln_2.bias
-      )
-      self.encoder_blocks[i].mlp.layer[0].weight.copy_(
-        gpt.transformer.h[i].mlp.c_fc.weight
-      )
-      self.encoder_blocks[i].mlp.layer[0].bias.copy_(
-        gpt.transformer.h[i].mlp.c_fc.bias
-      )
-      self.encoder_blocks[i].mlp.layer[3].weight.copy_(
-        gpt.transformer.h[i].mlp.c_proj.weight
-      )
-      self.encoder_blocks[i].mlp.layer[3].bias.copy_(
-        gpt.transformer.h[i].mlp.c_proj.bias
-      )
-      self.encoder_blocks[i].attention.query_key_value.weight.copy_(
-        gpt.transformer.h[i].attn.c_attn.weight
-      )
-      self.encoder_blocks[i].attention.query_key_value.bias.copy_(
-        gpt.transformer.h[i].attn.c_attn.bias
-      )
-      self.encoder_blocks[i].attention.projection.weight.copy_(
-        gpt.transformer.h[i].attn.c_proj.weight
-      )
-      self.encoder_blocks[i].attention.projection.bias.copy_(
-        gpt.transformer.h[i].attn.c_proj.bias
-      )
+      for i in range(self.num_encoder_layers):
+        self.encoder_blocks[i].norm1.weight.copy_(
+          gpt.transformer.h[i].ln_1.weight
+        )
+        self.encoder_blocks[i].norm1.bias.copy_(
+          gpt.transformer.h[i].ln_1.bias
+        )
+        self.encoder_blocks[i].norm2.weight.copy_(
+          gpt.transformer.h[i].ln_2.weight
+        )
+        self.encoder_blocks[i].norm2.bias.copy_(
+          gpt.transformer.h[i].ln_2.bias
+        )
+        self.encoder_blocks[i].mlp.layer[0].weight.copy_(
+          gpt.transformer.h[i].mlp.c_fc.weight
+        )
+        self.encoder_blocks[i].mlp.layer[0].bias.copy_(
+          gpt.transformer.h[i].mlp.c_fc.bias
+        )
+        self.encoder_blocks[i].mlp.layer[3].weight.copy_(
+          gpt.transformer.h[i].mlp.c_proj.weight
+        )
+        self.encoder_blocks[i].mlp.layer[3].bias.copy_(
+          gpt.transformer.h[i].mlp.c_proj.bias
+        )
+        self.encoder_blocks[i].attention.query_key_value.weight.copy_(
+          gpt.transformer.h[i].attn.c_attn.weight
+        )
+        self.encoder_blocks[i].attention.query_key_value.bias.copy_(
+          gpt.transformer.h[i].attn.c_attn.bias
+        )
+        self.encoder_blocks[i].attention.projection.weight.copy_(
+          gpt.transformer.h[i].attn.c_proj.weight
+        )
+        self.encoder_blocks[i].attention.projection.bias.copy_(
+          gpt.transformer.h[i].attn.c_proj.bias
+        )
     return self
 
