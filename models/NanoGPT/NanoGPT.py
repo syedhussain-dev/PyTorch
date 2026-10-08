@@ -53,6 +53,7 @@ class MultiHeadCasualSelfAttention(nn.Module):
   def forward(self, x):
       batch, tokens, _ = x.shape
       qkv = self.query_key_value(x)
+      print(qkv.shape)
       query, key, value = qkv.chunk(3, dim=-1)
 
       query = query.reshape(batch, tokens, self.heads, self.head_dim).transpose(1, 2)
@@ -67,7 +68,9 @@ class MultiHeadCasualSelfAttention(nn.Module):
       out = torch.matmul(attention, value)
 
       out = out.transpose(1, 2).reshape(batch, tokens, self.embed_dim)
-      return self.projection(out)
+      out = self.projection(out)
+      print(out.shape)
+      return out
 
 class FeedForward(nn.Module):
   """
@@ -91,15 +94,18 @@ class FeedForward(nn.Module):
   def __init__(self, embed_dim, mlp_dim, mlp_dropout):
       super().__init__()
       self.layer = nn.Sequential(
-          nn.Conv1d(in_channels=embed_dim,out_channels=mlp_dim,kernel_size=(1,1),stride=1,padding=1),
-          nn.GELU(),
-          nn.Dropout(mlp_dropout),
-          nn.Conv1d(in_channels=mlp_dim,out_channels=embed_dim,kernel_size=(1,1),stride=1,padding=1),
-          nn.Dropout(mlp_dropout),
+        nn.Conv1d(in_channels=embed_dim,out_channels=mlp_dim,kernel_size=1),
+        nn.GELU(),
+        nn.Dropout(mlp_dropout),
+        nn.Conv1d(in_channels=mlp_dim,out_channels=embed_dim,kernel_size=1),
+        nn.Dropout(mlp_dropout)
       )
 
   def forward(self, x):
-      return self.layer(x)
+      x = x.transpose(1,2)
+      x = self.layer(x)
+      x = x.transpose(1,2)
+      return x
 
 class GPTTransformBlock(nn.Module):
   """
@@ -249,13 +255,13 @@ class GPT(nn.Module):
           gpt.transformer.h[i].ln_2.bias
         )
         self.encoder_blocks[i].mlp.layer[0].weight.copy_(
-          gpt.transformer.h[i].mlp.c_fc.weight
+          gpt.transformer.h[i].mlp.c_fc.weight.T.unsqueeze(dim=2)
         )
         self.encoder_blocks[i].mlp.layer[0].bias.copy_(
           gpt.transformer.h[i].mlp.c_fc.bias
         )
         self.encoder_blocks[i].mlp.layer[3].weight.copy_(
-          gpt.transformer.h[i].mlp.c_proj.weight
+          gpt.transformer.h[i].mlp.c_proj.weight.T.unsqueeze(dim=2)
         )
         self.encoder_blocks[i].mlp.layer[3].bias.copy_(
           gpt.transformer.h[i].mlp.c_proj.bias
