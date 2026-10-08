@@ -53,7 +53,6 @@ class MultiHeadCasualSelfAttention(nn.Module):
   def forward(self, x):
       batch, tokens, _ = x.shape
       qkv = self.query_key_value(x)
-      print(qkv.shape)
       query, key, value = qkv.chunk(3, dim=-1)
 
       query = query.reshape(batch, tokens, self.heads, self.head_dim).transpose(1, 2)
@@ -69,7 +68,6 @@ class MultiHeadCasualSelfAttention(nn.Module):
 
       out = out.transpose(1, 2).reshape(batch, tokens, self.embed_dim)
       out = self.projection(out)
-      print(out.shape)
       return out
 
 class FeedForward(nn.Module):
@@ -267,7 +265,7 @@ class GPT(nn.Module):
           gpt.transformer.h[i].mlp.c_proj.bias
         )
         self.encoder_blocks[i].attention.query_key_value.weight.copy_(
-          gpt.transformer.h[i].attn.c_attn.weight
+          gpt.transformer.h[i].attn.c_attn.weight.T
         )
         self.encoder_blocks[i].attention.query_key_value.bias.copy_(
           gpt.transformer.h[i].attn.c_attn.bias

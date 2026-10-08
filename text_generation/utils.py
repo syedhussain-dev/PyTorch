@@ -72,6 +72,7 @@ def set_seeds(seed: int=42):
 
 def download_data(source: str, 
                   destination: str,
+                  filename: str,
                   remove_source: bool = True) -> Path:
   """Downloads a zipped dataset from source and unzips to destination.
 
@@ -91,7 +92,7 @@ def download_data(source: str,
   data_path = Path("data/")
   data_path.mkdir(parents=True, exist_ok=True)
 
-  zip_file = data_path / "watch_shoe_fragrance.zip"
+  zip_file = data_path / filename
   extract_path = data_path / destination
 
   # download only if needed
@@ -168,60 +169,3 @@ def model_size_and_params(model, model_savepath) -> Dict:
   model_size = Path(model_savepath).stat().st_size // (1024**2)
   total_params = sum(torch.numel(param) for param in model.parameters())
   return {"MODEL_SIZE":model_size,"TOTAL_PARAMETERS":total_params}
-
-def can_fit_batch(model: torch.nn.Module, input_shape, batch_size: int, device: torch.device):
-    model = model.to(device)
-    model.train()
-
-    try:
-        torch.cuda.empty_cache()
-        model.zero_grad(set_to_none=True)
-
-        x = torch.randint(
-            0,
-            model.vocab_size,
-            (batch_size, *input_shape),
-            device=device,
-            dtype=torch.long
-        )
-
-        output = model(x)
-        loss = output.mean()
-        loss.backward()
-
-        del x, output, loss
-        model.zero_grad(set_to_none=True)
-        torch.cuda.empty_cache()
-
-        return True
-
-    except RuntimeError as e:
-        if "out of memory" in str(e).lower():
-            model.zero_grad(set_to_none=True)
-            torch.cuda.empty_cache()
-            return False
-        raise
-
-def find_max_batch_size(
-    model,
-    input_shape,
-    device,
-    start=1,
-    max_batch=2048,
-):
-    """
-    Finds the maximum batch size that fits using binary search.
-    """
-    low = start
-    high = start
-    while high <= max_batch and can_fit_batch(model, input_shape, high, device):
-        low = high
-        high *= 2
-    high = min(high, max_batch)
-    while low + 1 < high:
-        mid = (low + high) // 2
-        if can_fit_batch(model, input_shape, mid, device):
-            low = mid
-        else:
-            high = mid
-    return low
