@@ -538,6 +538,7 @@ class VAE(nn.Module):
         )
         self.latent_distribution = LatentDistribution()
 
+    @torch.inference_mode()
     def forward(self, x:torch.Tensor):
         if self.encode: 
             x = self.encoder(x)

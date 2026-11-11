@@ -524,6 +524,7 @@ class UNET(nn.Module):
             kernel_size=(1,1), stride=1, padding=0
         )
 
+    @torch.inference_mode()
     def forward(self, x:torch.Tensor, context:torch.Tensor, timestep:torch.Tensor):
         assert len(timestep.shape) == 1
         temb = self.timestep_embedding(timestep)

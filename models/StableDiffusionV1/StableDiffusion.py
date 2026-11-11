@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import yaml
-from models.StableDiffusionV1.DDIMScheduler import DDIMSchedular
+from models.StableDiffusionV1.DDIMScheduler import DDIMScheduler
 from models.StableDiffusionV1.CLIPTransformer import CLIPTransformer
 from models.StableDiffusionV1.UNET import UNET
 from models.StableDiffusionV1.VariationalAutoEncoder import VAE
@@ -17,6 +17,7 @@ class StableDiffusion(nn.Module):
                 #  clip:torch.nn.Module,
                 #  scheduler,
                 device:torch.device,
+                dtype:torch.dtype,
                 max_seq_len:int=sd_config["max_seq_len"],
                 height:int=sd_config["height"],
                 width:int=sd_config["width"],
@@ -28,18 +29,21 @@ class StableDiffusion(nn.Module):
         super().__init__()
 
         # self.tokenizer = tokenizer
-        # self.unet = unet
-        # self.vae = vae
-        # self.clip = clip
+        # self.unet = unet.to(device=device, dtype=dtype).eval()
+        # self.vae = vae.to(device=device, dtype=dtype).eval()
+        # self.clip = clip.to(device=device, dtype=dtype).eval()
         # self.scheduler = scheduler
 
-        self.tokenizer = CLIPTokenizer()
-        self.unet = UNET().load_pretrained()
-        self.vae = VAE(decode=True).load_pretrained()
-        self.clip = CLIPTransformer().load_pretrained()
-        self.scheduler = DDIMSchedular()
+        self.tokenizer = CLIPTokenizer.from_pretrained(
+            "openai/clip-vit-large-patch14"
+        )
+        self.unet = UNET().load_pretrained().to(device=device, dtype=dtype).eval()
+        self.vae = VAE(decode=True).load_pretrained().to(device=device, dtype=dtype).eval()
+        self.clip = CLIPTransformer().load_pretrained().to(device=device, dtype=dtype).eval()
+        self.scheduler = DDIMScheduler()
 
         self.device = device
+        self.dtype = dtype
         self.max_seq_len = max_seq_len
         self.height = height
         self.width = width
@@ -53,8 +57,10 @@ class StableDiffusion(nn.Module):
                 negative_prompt:str="",
                 ):
         
-        if self.height or self.width or self.num_inference_steps or self.guidance_scale <= 0:
-            raise ValueError("Image Dimension and Inference steps must be greater than zero")
+        if self.height <= 0 or self.width <= 0:
+            raise ValueError("Image Dimension must be greater than zero")
+        if self.num_inference_steps <= 0 or self.guidance_scale <= 0:
+            raise ValueError("Number of Inference steps and guidance scale must be greater than zero")
 
         if not 0 <= self.eta <= 1:
             raise ValueError("Eta must be between 0 and 1")
@@ -84,25 +90,40 @@ class StableDiffusion(nn.Module):
         )
 
         x_t = torch.randn(
-            size=(1,4,64,64),
+            size=(1,4,self.height//8,self.width//8),
             device=self.device,
-            dtype="float32"
+            dtype=self.dtype
         )
 
-        delta_t = self.T / self.num_inference_steps
-        timestep = torch.arange(self.T-delta_t,0,delta_t,device=self.device)
-        prev_t = 1000
+        delta_t = self.T // self.num_inference_steps
+        timesteps = torch.arange(
+            self.num_inference_steps-1,
+            -1,
+            -1,
+            device=self.device,
+            dtype=torch.long
+        ) * delta_t
 
-        for t in timestep:
-            pred_noise = self.unet(
+        for i,t in enumerate(timesteps):
+            prev_t = timesteps[i+1] if i+1<len(timesteps) else -1
+            positive_pred_noise = self.unet(
                 x_t,positive_context,t
+            )
+            negative_pred_noise = self.unet(
+                x_t,negative_context,t
+            )
+            pred_noise = negative_pred_noise + self.guidance_scale * (
+                positive_pred_noise - negative_pred_noise
             )
             x_t = self.scheduler.step(
                 prev_x=x_t,eta=self.eta,
                 pred_noise=pred_noise,timestep=t,
                 prev_timestep=prev_t
             )
-            prev_t = t
+
+        x_0 = x_t / 0.18215
+        image = self.vae(x_0)
+        return image
 
 
 

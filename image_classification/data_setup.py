@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
 import os
-from custom_datasets.ImageFolderCustom import ImageFolderCustom
+from custom_datasets.ImageDatasets import ImageFolderCustom
 NUM_WORKERS = os.cpu_count()
 
 

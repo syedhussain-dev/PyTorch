@@ -263,6 +263,7 @@ class CLIPTransformer(nn.Module):
         )
         self.layernorm = nn.LayerNorm(normalized_shape=embed_dim)
 
+    @torch.inference_mode()
     def forward(self, x:torch.Tensor):
         x = self.embedding(x)
         for block in self.encoder_layers:

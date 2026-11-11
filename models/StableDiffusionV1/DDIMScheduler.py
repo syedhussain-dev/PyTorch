@@ -6,7 +6,7 @@ import yaml
 with open("Parameters.yaml","r") as f:
     ddim_config = yaml.safe_load(f)["StableDiffusion"]["DDIMScheduler"]
 
-class DDIMSchedular():
+class DDIMScheduler():
     """
     Implements the forward and reverse diffusion processes using a DDIM scheduler.
 
