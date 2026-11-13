@@ -3,8 +3,12 @@ import torch
 from torch import nn
 from transformers import CLIPTextModel
 import yaml
+import os
 
-with open("Parameters.yaml","r") as f:
+script_dir = os.path.dirname(os.path.abspath(__file__))
+yaml_path = os.path.join(script_dir,"Parameters.yaml")
+
+with open(yaml_path,"r") as f:
     config = yaml.safe_load(f)["StableDiffusion"]["CLIP"]
 
 class Embedding(nn.Module):

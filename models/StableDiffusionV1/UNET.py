@@ -1,10 +1,14 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
+import os
 from diffusers import UNet2DConditionModel
 import yaml
 
-with open("Parameters.yaml","r") as f:
+script_dir = os.path.dirname(os.path.abspath(__file__))
+yaml_path = os.path.join(script_dir,"Parameters.yaml")
+
+with open(yaml_path,"r") as f:
     unet_config = yaml.safe_load(f)["StableDiffusion"]["UNET"]
     vae_config = yaml.safe_load(f)["StableDiffusion"]["VAE"]
 

@@ -1,9 +1,13 @@
 import torch
 from torch import nn
 import yaml
+import os
 from diffusers import AutoencoderKL
 
-with open("Parameters.yaml", "r") as f:
+script_dir = os.path.dirname(os.path.abspath(__file__))
+yaml_path = os.path.join(script_dir,"Parameters.yaml")
+
+with open(yaml_path,"r") as f:
     config = yaml.safe_load(f)["StableDiffusion"]["VAE"]
     encoder_config = yaml.safe_load(f)["StableDiffusion"]["VAE"]["encoder"]
     decoder_config = yaml.safe_load(f)["StableDiffusion"]["VAE"]["decoder"]

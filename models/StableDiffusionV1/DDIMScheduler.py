@@ -2,8 +2,12 @@ import torch
 import math
 from typing import Tuple
 import yaml
+import os
 
-with open("Parameters.yaml","r") as f:
+script_dir = os.path.dirname(os.path.abspath(__file__))
+yaml_path = os.path.join(script_dir,"Parameters.yaml")
+
+with open(yaml_path,"r") as f:
     ddim_config = yaml.safe_load(f)["StableDiffusion"]["DDIMScheduler"]
 
 class DDIMScheduler():
