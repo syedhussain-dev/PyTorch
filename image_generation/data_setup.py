@@ -43,7 +43,7 @@ def create_dataloaders(target_dir:str,train_transforms:transforms,
     )
 
     test_dataloader = DataLoader(
-        dataset=train_dataset,
+        dataset=test_dataset,
         batch_size=batch_size,
         num_workers=num_workers,
         persistent_workers=True,

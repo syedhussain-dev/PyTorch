@@ -11,11 +11,11 @@ with open("Parameters.yaml","r") as f:
 
 class StableDiffusion(nn.Module):
     def __init__(self,
-                #  tokenizer,
-                #  unet:torch.nn.Module,
-                #  vae:torch.nn.Module,
-                #  clip:torch.nn.Module,
-                #  scheduler,
+                tokenizer,
+                unet:torch.nn.Module,
+                vae:torch.nn.Module,
+                clip:torch.nn.Module,
+                scheduler,
                 device:torch.device,
                 dtype:torch.dtype,
                 max_seq_len:int=sd_config["max_seq_len"],
@@ -28,19 +28,11 @@ class StableDiffusion(nn.Module):
                 ):
         super().__init__()
 
-        # self.tokenizer = tokenizer
-        # self.unet = unet.to(device=device, dtype=dtype).eval()
-        # self.vae = vae.to(device=device, dtype=dtype).eval()
-        # self.clip = clip.to(device=device, dtype=dtype).eval()
-        # self.scheduler = scheduler
-
-        self.tokenizer = CLIPTokenizer.from_pretrained(
-            "openai/clip-vit-large-patch14"
-        )
-        self.unet = UNET().load_pretrained().to(device=device, dtype=dtype).eval()
-        self.vae = VAE(decode=True).load_pretrained().to(device=device, dtype=dtype).eval()
-        self.clip = CLIPTransformer().load_pretrained().to(device=device, dtype=dtype).eval()
-        self.scheduler = DDIMScheduler()
+        self.tokenizer = tokenizer
+        self.unet = unet.to(device=device, dtype=dtype).eval()
+        self.vae = vae.to(device=device, dtype=dtype).eval()
+        self.clip = clip.to(device=device, dtype=dtype).eval()
+        self.scheduler = scheduler
 
         self.device = device
         self.dtype = dtype
