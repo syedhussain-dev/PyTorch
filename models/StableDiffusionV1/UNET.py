@@ -9,8 +9,9 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 yaml_path = os.path.join(script_dir,"Parameters.yaml")
 
 with open(yaml_path,"r") as f:
-    unet_config = yaml.safe_load(f)["StableDiffusion"]["UNET"]
-    vae_config = yaml.safe_load(f)["StableDiffusion"]["VAE"]
+    config = yaml.safe_load(f)["StableDiffusion"]
+unet_config = config["UNET"]
+vae_config = config["VAE"]
 
 class TimestepEmbedding(nn.Module):
     """
