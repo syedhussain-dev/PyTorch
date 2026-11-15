@@ -1,12 +1,12 @@
 import torch
 from torch import nn
 import yaml
-from models.StableDiffusionV1.DDIMScheduler import DDIMScheduler
-from models.StableDiffusionV1.CLIPTransformer import CLIPTransformer
-from models.StableDiffusionV1.UNET import UNET
-from models.StableDiffusionV1.VariationalAutoEncoder import VAE
-from transformers import CLIPTokenizer
-with open("Parameters.yaml","r") as f:
+import os
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+yaml_path = os.path.join(script_dir,"Parameters.yaml")
+
+with open(yaml_path,"r") as f:
     sd_config = yaml.safe_load(f)["StableDiffusion"]
 
 class StableDiffusion(nn.Module):

@@ -231,7 +231,7 @@ class Upsample(nn.Module):
         Input, x:(batch, input_channels, height, width)
         Output, x:(batch, output_channels, height*2, width*2)
     """
-    def __init__(self, input_channels:int, output_channels:int, scale_factor:int=config["upsample_scale_factor"]):
+    def __init__(self, input_channels:int, output_channels:int, scale_factor:int=decoder_config["upsample_scale_factor"]):
         super().__init__()
         self.upsample = nn.Upsample(scale_factor=scale_factor, mode="nearest")
         self.upsampling_conv = nn.Conv2d(
@@ -524,11 +524,7 @@ class VAE(nn.Module):
         super().__init__()
         self.encode = encode
         self.decode = decode
-        if self.encode:
-            self.decode = False
-        if self.decode:
-            self.encode = False
-        assert self.encode == self.decode, "Encode and Decode cannot be the value!"
+        assert self.encode == self.decode, "Encode and Decode cannot be the same value!"
         
         self.encoder = Encoder()
         self.decoder = Decoder()

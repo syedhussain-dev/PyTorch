@@ -1,20 +1,5 @@
 StableDiffusion:
 
-  training:
-    batch_size: 2
-    accum_steps: 4
-    device: cuda
-    precision: float16
-    epochs: 50
-    divisor: 1
-    model_name: unet_2d_condition_model
-    loss_curves: True
-    scheduler: CosineAnnealing, LinearLR
-    max_seq_len: *c
-    loss_fn: MSELoss
-    optimiser: AdamW
-
-
   height: 512
   width: 512
   num_inference_steps: 50
@@ -34,7 +19,7 @@ StableDiffusion:
     vocab_size: 49408
     max_seq_len: *c
     mlp_expansion: 4
-    num_layers: 12
+    num_encoder_layers: 12
 
   UNET:
     input_conv_channels: 320
@@ -69,9 +54,22 @@ StableDiffusion:
       num_upblocks: 4
       input_channels: 512
       output_channels: *b
-      num_upblocks: 4
       num_resnets: 3
       num_upsamplers: 1
       upsample_scale_factor: 2
       midblock_num_attn: 1
+
+  training:
+    batch_size: 2
+    accum_steps: 4
+    device: cuda
+    precision: float16
+    epochs: 50
+    divisor: 1
+    model_name: unet_2d_condition_model
+    loss_curves: True
+    scheduler: CosineAnnealing, LinearLR
+    max_seq_len: *c
+    loss_fn: MSELoss
+    optimiser: AdamW
 
