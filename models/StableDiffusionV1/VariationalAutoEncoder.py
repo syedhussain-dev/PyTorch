@@ -524,7 +524,7 @@ class VAE(nn.Module):
         super().__init__()
         self.encode = encode
         self.decode = decode
-        assert self.encode == self.decode, "Encode and Decode cannot be the same value!"
+        assert self.encode != self.decode, "Encode and Decode cannot be the same value!"
         
         self.encoder = Encoder()
         self.decoder = Decoder()
