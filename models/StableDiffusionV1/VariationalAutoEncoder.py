@@ -529,7 +529,7 @@ class VAE(nn.Module):
         self.encoder = Encoder()
         self.decoder = Decoder()
         self.quant_conv = nn.Conv2d(
-            in_channels=encoder_config["output_channels"], out_channels=2*config["embed_dim"],
+            in_channels=config["latent_channels"], out_channels=2*config["embed_dim"],
             kernel_size=(1,1), stride=1, padding=0
         )
         self.post_quant_conv = nn.Conv2d(
